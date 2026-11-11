@@ -1,0 +1,15 @@
+[Unit]
+Description=CloudOps Task Manager Flask application
+After=network.target
+
+[Service]
+User=cloudops
+Group=www-data
+WorkingDirectory=/opt/cloudops-task-manager/app
+EnvironmentFile=-/etc/cloudops-task-manager.env
+ExecStart=/opt/cloudops-task-manager/venv/bin/gunicorn --workers 2 --bind 127.0.0.1:8000 --access-logfile - --error-logfile - wsgi:app
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

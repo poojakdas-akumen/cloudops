@@ -1,0 +1,85 @@
+name: CloudOps Task Manager CI/CD
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Test and validate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+      - name: Run pytest
+        run: pytest
+      - name: Compile Python files
+        run: python -m compileall -q app.py wsgi.py tests
+
+  package:
+    name: Build deployment package
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create release archive
+        run: |
+          tar --exclude='.git' --exclude='.github' --exclude='.venv' \
+              --exclude='__pycache__' --exclude='.pytest_cache' \
+              -czf cloudops-task-manager.tar.gz \
+              app.py wsgi.py requirements.txt templates static
+      - name: Upload release artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: cloudops-task-manager
+          path: cloudops-task-manager.tar.gz
+          retention-days: 7
+
+  deploy:
+    name: Deploy to Azure VM
+    needs: package
+    runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    steps:
+      - name: Download release artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: cloudops-task-manager
+      - name: Configure SSH
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.AZURE_VM_SSH_PRIVATE_KEY }}
+      - name: Trust Azure VM host
+        env:
+          VM_HOST: ${{ secrets.AZURE_VM_HOST }}
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -H "$VM_HOST" >> ~/.ssh/known_hosts
+      - name: Copy package to Azure VM
+        env:
+          VM_HOST: ${{ secrets.AZURE_VM_HOST }}
+          VM_USER: ${{ secrets.AZURE_VM_USER }}
+        run: scp cloudops-task-manager.tar.gz "$VM_USER@$VM_HOST:/tmp/cloudops-task-manager.tar.gz"
+      - name: Deploy and verify
+        env:
+          VM_HOST: ${{ secrets.AZURE_VM_HOST }}
+          VM_USER: ${{ secrets.AZURE_VM_USER }}
+        run: |
+          ssh "$VM_USER@$VM_HOST" \
+            "sudo /opt/cloudops-task-manager/deploy.sh /tmp/cloudops-task-manager.tar.gz"

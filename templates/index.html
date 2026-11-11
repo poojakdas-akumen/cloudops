@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CloudOps Task Manager</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+<header class="topbar">
+  <div><span class="brand-mark">C</span><span class="brand">CloudOps</span></div>
+  <span class="tagline">Task Management Workspace</span>
+</header>
+<main class="container">
+  <section class="welcome">
+    <div><p class="eyebrow">OPERATIONS OVERVIEW</p><h1>Manage work. Deliver reliably.</h1>
+    <p class="muted">A lightweight workspace for tracking CloudOps activities.</p></div>
+    <span class="live"><i></i> Application live</span>
+  </section>
+
+  <section class="stats">
+    <article><span>Total tasks</span><strong>{{ stats.total }}</strong></article>
+    <article><span>Pending</span><strong>{{ stats.pending }}</strong></article>
+    <article><span>In progress</span><strong>{{ stats.progress }}</strong></article>
+    <article><span>Completed</span><strong>{{ stats.completed }}</strong></article>
+  </section>
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}{% for category, message in messages %}
+      <div class="flash {{ category }}">{{ message }}</div>
+    {% endfor %}{% endif %}
+  {% endwith %}
+
+  <section class="workspace">
+    <div class="panel create-panel">
+      <h2>Create a task</h2><p class="muted small">Add an activity to your operations board.</p>
+      <form method="post" action="{{ url_for('create_task') }}">
+        <label>Task title *</label><input name="title" maxlength="120" placeholder="e.g. Review production server logs" required>
+        <label>Description</label><textarea name="description" rows="3" placeholder="Add task details..."></textarea>
+        <label>Owner</label><input name="owner" maxlength="80" placeholder="e.g. CloudOps team">
+        <label>Priority</label><select name="priority"><option>Low</option><option selected>Medium</option><option>High</option></select>
+        <button class="primary" type="submit">＋ Add task</button>
+      </form>
+    </div>
+
+    <div class="panel task-panel">
+      <div class="task-heading"><div><h2>Task board</h2><p class="muted small">Track and update your work.</p></div>
+        <form method="get"><select name="status" onchange="this.form.submit()">
+          <option value="">All statuses</option>
+          {% for s in ['Pending','In Progress','Completed'] %}
+          <option value="{{ s }}" {% if selected_status == s %}selected{% endif %}>{{ s }}</option>
+          {% endfor %}
+        </select></form>
+      </div>
+      {% if tasks %}
+      <div class="task-list">
+        {% for task in tasks %}
+        <article class="task">
+          <div class="task-main">
+            <div class="task-title-row"><h3>{{ task.title }}</h3><span class="priority {{ task.priority|lower }}">{{ task.priority }}</span></div>
+            {% if task.description %}<p>{{ task.description }}</p>{% endif %}
+            <div class="meta">Owner: {{ task.owner or 'Unassigned' }} · Created: {{ task.created_at }}</div>
+          </div>
+          <div class="task-actions">
+            <form method="post" action="{{ url_for('update_status', task_id=task.id) }}">
+              <select name="status" aria-label="Task status" onchange="this.form.submit()">
+                {% for s in ['Pending','In Progress','Completed'] %}
+                <option value="{{ s }}" {% if task.status == s %}selected{% endif %}>{{ s }}</option>
+                {% endfor %}
+              </select>
+            </form>
+            <form method="post" action="{{ url_for('delete_task', task_id=task.id) }}" onsubmit="return confirm('Delete this task?')">
+              <button class="delete" type="submit">Delete</button>
+            </form>
+          </div>
+        </article>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div class="empty"><div>☷</div><h3>No tasks found</h3><p>Create a task to get your CloudOps board started.</p></div>
+      {% endif %}
+    </div>
+  </section>
+  <footer>CloudOps Task Manager <span>Flask · SQLite · Nginx · Azure VM</span></footer>
+</main>
+</body>
+</html>
